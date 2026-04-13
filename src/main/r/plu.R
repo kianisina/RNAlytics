@@ -1,0 +1,5 @@
+library(plumber)
+
+# 'plumber.R' is the name of the file we just created
+pr("deg.R") %>%
+  pr_run(port = 8000)
