@@ -1,93 +1,148 @@
-library(plumber)
-library(readr)
+# ==============================================================================
+# Spring Boot + RabbitMQ DESeq2 Pipeline Script (Multi-Contrast Edition)
+# ==============================================================================
 
-#* @apiTitle Bioinformatics Plotting API
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) == 0) { stop("FATAL ERROR: No job directory provided!") }
+job_dir <- args[1]
+setwd(job_dir)
+cat("Starting DESeq2 Analysis in directory:", job_dir, "\n")
 
-#* Generate a Volcano Plot from uploaded CSV data
-#* @post /volcano
-#* @serializer png
-function(req, res) {
+# 2. LOAD LIBRARIES
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(plotly))
+suppressPackageStartupMessages(library(htmlwidgets))
+suppressPackageStartupMessages(library(AnnotationDbi)) # NEW
+suppressPackageStartupMessages(library(org.Hs.eg.db))  # NEW (Human Database)
 
-  raw_data <- req$postBody
 
-  message("--- New Request Received ---")
-  message("Data length: ", nchar(raw_data), " characters")
+# 3. READ THE DATA
+# Read the first few lines to detect the separator
+sample_lines <- readLines("counts.csv", n = 5)
 
-  tryCatch({
+# Grab the first line that does NOT start with a '#'
+first_data_line <- sample_lines[!grepl("^#", sample_lines)][1]
 
-    # 🔥 1. Normalize line endings
-    raw_data <- gsub("\r", "", raw_data)
-
-    # 🔥 2. Fix broken quotes globally (safe approach)
-    raw_data <- gsub('""', '"', raw_data)
-
-    # 🔥 3. Try parsing with readr (robust)
-    df <- read_csv(
-      raw_data,
-      show_col_types = FALSE,
-      progress = FALSE,
-      guess_max = 10000
-    )
-
-    # 🔍 Debug
-    message("Columns detected: ", paste(colnames(df), collapse = ", "))
-    message("Dimensions: ", paste(dim(df), collapse = " x "))
-
-    # 🔥 4. Dynamically find required columns
-    col_logfc <- grep("log2.*fold", colnames(df), ignore.case = TRUE, value = TRUE)
-    col_pval  <- grep("^pvalue$|p.*value", colnames(df), ignore.case = TRUE, value = TRUE)
-
-    if (length(col_logfc) == 0) stop("log2FoldChange column not found")
-    if (length(col_pval) == 0) stop("pvalue column not found")
-
-    # Take first match
-    col_logfc <- col_logfc[1]
-    col_pval  <- col_pval[1]
-
-    message("Using columns: ", col_logfc, " and ", col_pval)
-
-    # 🔥 5. Convert safely to numeric
-    logFC_data <- suppressWarnings(as.numeric(df[[col_logfc]]))
-    pval_data  <- suppressWarnings(as.numeric(df[[col_pval]]))
-
-    # Remove invalid rows
-    valid <- !is.na(logFC_data) & !is.na(pval_data) & pval_data > 0
-
-    logFC_data <- logFC_data[valid]
-    pval_data  <- pval_data[valid]
-
-    if (length(logFC_data) == 0) {
-      stop("No valid numeric data found after cleaning")
-    }
-
-    # 🔥 6. Compute volcano values
-    negLog10Pval <- -log10(pval_data)
-
-    # 🔥 7. Dynamic thresholding
-    point_colors <- ifelse(
-      negLog10Pval > -log10(0.05) & abs(logFC_data) > 1,
-      "red",
-      "black"
-    )
-
-    # 🔥 8. Plot
-    plot(
-      logFC_data,
-      negLog10Pval,
-      main = "Volcano Plot",
-      xlab = "Log2 Fold Change",
-      ylab = "-Log10(p-value)",
-      pch = 16,
-      col = point_colors
-    )
-
-    message("Plot generated successfully!")
-
-  }, error = function(e) {
-
-    message("CRASH IN R: ", e$message)
-    res$status <- 500
-    return(list(error = e$message))
-
-  })
+# Now safely check if the actual data uses tabs or commas
+if (grepl("\t", first_data_line)) {
+  cat("Detected Tab-Separated featureCounts file.\n")
+  counts <- read.delim("counts.csv", comment.char="#", check.names=FALSE, row.names=1)
+} else {
+  cat("Detected Comma-Separated CSV file.\n")
+  counts <- read.csv("counts.csv", comment.char="#", check.names=FALSE, row.names=1)
 }
+
+coldata <- read.csv("coldata.csv", row.names=1, check.names=FALSE)
+
+# Clean up BAM/SAM suffixes if the user forgot to remove them
+colnames(counts) <- basename(colnames(counts))
+colnames(counts) <- gsub("\\.bam$", "", colnames(counts), ignore.case = TRUE)
+colnames(counts) <- gsub("\\.sam$", "", colnames(counts), ignore.case = TRUE)
+colnames(counts) <- gsub("\\.sorted$", "", colnames(counts), ignore.case = TRUE)
+
+# If it's a raw featureCounts file, delete the genomic metadata columns.
+metadata_cols <- c("Chr", "Start", "End", "Strand", "Length")
+counts <- counts[, !(colnames(counts) %in% metadata_cols)]
+# 4. DATA WRANGLING & SAFETY CHECKS
+coldata$condition <- as.factor(coldata$condition)
+common_samples <- intersect(colnames(counts), rownames(coldata))
+
+if (length(common_samples) == 0) {
+  stop("FATAL ERROR: Sample names in coldata do not match the counts matrix!")
+}
+
+counts <- counts[, common_samples, drop=FALSE]
+coldata <- coldata[common_samples, , drop=FALSE]
+counts <- round(counts)
+
+# 5. RUN CORE DESEQ2
+cat("Running Core DESeq2 Model...\n")
+dds <- DESeqDataSetFromMatrix(countData = counts, colData = coldata, design = ~ condition)
+dds <- DESeq(dds)
+
+# ---  OVERALL PCA PLOT ---
+cat("Generating PCA Plot...\n")
+# VST (Variance Stabilizing Transformation) normalizes data perfectly for PCA
+vsd <- vst(dds, blind=FALSE)
+pcaData <- plotPCA(vsd, intgroup=c("condition"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+pca_plot <- ggplot(pcaData, aes(PC1, PC2, color=condition)) +
+  geom_point(size=3) +
+  geom_text_repel(aes(label = rownames(pcaData)),
+                  size = 4,
+                  box.padding = 0.5,
+                  point.padding = 0.5,
+                  segment.color = "grey50")+
+  # theme_minimal() +
+  labs(title="PCA Plot: Sample Clustering",
+       x=paste0("PC1: ", percentVar[1], "% variance"),
+       y=paste0("PC2: ", percentVar[2], "% variance"))
+
+ggsave("dataset_pca.png", plot=pca_plot, width=8, height=6, dpi=300)
+# -----------------------------
+
+
+# Keep only genes where the sum of counts across all samples is at least 10
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+
+# 6. GENERATE ALL PAIRWISE COMPARISONS
+# Get all unique conditions (e.g., "control", "Ser", "Ser_p38")
+conditions <- levels(coldata$condition)
+
+# Create a matrix of all possible pairs (combinations of 2)
+# If you have 3 groups, this creates 3 pairs. If you have 5 groups, this creates 10 pairs!
+pairs <- combn(conditions, 2)
+
+cat("Found", ncol(pairs), "possible comparisons. Generating results...\n")
+
+# Loop through every single pair
+# Loop through every single pair
+for (i in 1:ncol(pairs)) {
+
+  group1 <- pairs[1, i]
+  group2 <- pairs[2, i]
+  comparison_name <- paste0(group1, "_vs_", group2)
+  cat("Processing:", comparison_name, "\n")
+
+  res <- results(dds, contrast=c("condition", group1, group2))
+  res_df <- as.data.frame(res)
+
+  # Add Significance categories
+  res_df$Significance <- "Not Significant"
+  valid_rows <- !is.na(res_df$padj)
+  res_df$Significance[valid_rows & res_df$padj < 0.05 & res_df$log2FoldChange > 1] <- "Upregulated"
+  res_df$Significance[valid_rows & res_df$padj < 0.05 & res_df$log2FoldChange < -1] <- "Downregulated"
+
+  # Explicitly save Gene Names as a real column so Vue can read it
+  res_df$Gene <- rownames(res_df)
+
+  if (any(grepl("^ENSG", res_df$Gene))) {
+    cat("Detected Ensembl IDs. Translating to Gene Symbols...\n")
+
+    # Sometimes featureCounts leaves version numbers (e.g. ENSG000.14). We strip the .14 to match the dictionary.
+    clean_ids <- gsub("\\.[0-9]+$", "", res_df$Gene)
+
+    # Query the offline human dictionary
+    mapped_symbols <- mapIds(org.Hs.eg.db,
+                             keys = clean_ids,
+                             column = "SYMBOL",
+                             keytype = "ENSEMBL",
+                             multiVals = "first")
+
+    # If a gene doesn't have a known symbol, keep the original ENSG ID so it isn't blank
+    mapped_symbols[is.na(mapped_symbols)] <- res_df$Gene[is.na(mapped_symbols)]
+    res_df$Symbol <- mapped_symbols
+  }
+
+  # ONLY EXPORT CSV (No more HTML/PNG generation needed here!)
+  csv_filename <- paste0(comparison_name, "_results.csv")
+  write.csv(res_df, file=csv_filename, row.names=FALSE)
+}
+
+# Create a tiny flag file so Java knows we successfully generated everything
+writeLines("done", "status.txt")
+cat("PIPELINE COMPLETED SUCCESSFULLY!\n")

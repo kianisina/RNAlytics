@@ -1,74 +1,67 @@
 package com.sp.web.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sp.web.web.UserCMD;
+import com.sp.web.domain.User;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import javax.crypto.SecretKey;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Date;
-
-public class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilter {
-
+import java.util.List;
+import java.util.stream.Collectors;
+public final class JwtAuthenticationFilter extends UsernamePasswordAuthenticationFilter {
+    private static final int TEN_DAYS_IN_MILLIS = 864_000_000;
+    private static final Logger LOG = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private final AuthenticationManager authenticationManager;
-
-    public JwtAuthenticationFilter(AuthenticationManager authenticationManager) {
+    private final SecurityConstant securityConstants;
+    // constructor for the Authentication  filter
+    public JwtAuthenticationFilter(AuthenticationManager authenticationManager,
+                                   final SecurityConstant securityConstants) {
         this.authenticationManager = authenticationManager;
-        setFilterProcessesUrl("/api/login"); // The endpoint your frontend will call to log in
+        this.securityConstants = securityConstants;
+        setFilterProcessesUrl(this.securityConstants.getAuthLoginUrl());
     }
-
     @Override
-    public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException {
-        try {
-            // Read the JSON from the frontend and turn it into our UserCMD object
-            UserCMD creds = new ObjectMapper().readValue(request.getInputStream(), UserCMD.class);
-
-            // Pass the username and password to Spring Security to check against the Database
-            return authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            creds.getUsername(),
-                            creds.getPassword(),
-                            new java.util.ArrayList<>()
-                    )
-            );
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) {
+        String username = request.getParameter("username");
+        String password = request.getParameter("password");
+        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(username,
+            password);
+        return authenticationManager.authenticate(authenticationToken);
     }
-
     @Override
-    protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authResult) throws IOException {
-        
-        // Login was successful! Get the user details.
-        UserDetails user = (UserDetails) authResult.getPrincipal();
-
-        // Build the secret key
-        SecretKey key = Keys.hmacShaKeyFor(SecurityConstant.SECRET_KEY.getBytes(StandardCharsets.UTF_8));
-
-        // Generate the JWT token (JJWT 0.12.5 syntax)
-        String token = Jwts.builder()
+    protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response,
+                                            FilterChain filterChain, Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof User) {
+            UserDetails user = (UserDetails) authentication.getPrincipal();
+            List<String> roles = user.getAuthorities()
+                .stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toList());
+            byte[] signingKey = securityConstants.getJwtSecret().getBytes();
+            String token = Jwts.builder()
+                .signWith(Keys.hmacShaKeyFor(signingKey), Jwts.SIG.HS512)
+                .header().add("typ", securityConstants.getTokenType())
+                .and()
+                .issuer(securityConstants.getTokenIssuer())
+                .audience().add(securityConstants.getTokenAudience())
+                .and()
                 .subject(user.getUsername())
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + SecurityConstant.EXPIRATION_TIME))
-                .signWith(key)
+                .expiration(new Date(System.currentTimeMillis() + TEN_DAYS_IN_MILLIS))
+                .claim("rol", roles)
                 .compact();
-
-        // Send the token back to the frontend in the HTTP Response Header
-        response.addHeader(SecurityConstant.HEADER_STRING, SecurityConstant.TOKEN_PREFIX + token);
-        
-        // Optional: Also send it in the body so it's easier for the frontend to read
-        response.setContentType("application/json");
-        response.getWriter().write("{\"token\": \"" + SecurityConstant.TOKEN_PREFIX + token + "\"}");
+            response.addHeader(securityConstants.getTokenHeader(), securityConstants.getTokenPrefix() + token);
+        } else {
+            LOG.error("Principal not expected Type: {}",principal.getClass().getName());
+        }
     }
 }

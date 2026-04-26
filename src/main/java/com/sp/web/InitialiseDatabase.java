@@ -32,21 +32,30 @@ public class InitialiseDatabase implements InitializingBean {
     public void afterPropertiesSet() {
         this.userRepository.deleteAll();
         User user = new User("a",
-            "$2a$10$d0Cm9hP08FyuLrVqMs7J6eihqyd19LYp2CCXgi.aQk/dei/XQ1w9C",
-            "jostilaender@gmail.com",
+            "{bcrypt}$2a$10$d0Cm9hP08FyuLrVqMs7J6eihqyd19LYp2CCXgi.aQk/dei/XQ1w9C",
+            "a@",
             "Jost",
-            23);
+            "as",
+            23,
+            "Universität Bielefeld"
+        );
+        user.addRole("ROLE_admin");
+        user.setAccountNonLocked(true);
         User usera = new User("Tom3",
-            "$2a$04$xIshy4lNZcjo.330dU1EN.xrBqanX8s.qGmUpgS0p0Gm.7Rh63Tyy",
+            "{bcrypt}$2a$04$xIshy4lNZcjo.330dU1EN.xrBqanX8s.qGmUpgS0p0Gm.7Rh63Tyy",
             "Müller@bla",
             "Thomas",
-            24);
+            "asd",
+            24,
+            "Universität Bielefeld");
         
         User userb = new User("Jonas2",
-            "$2a$12$AzozDXaHR9gYhQisg0x.deQ5piO3m2OjprZ7Onl4H1Md.kxs4LhcK",
+            "{bcrypt}$2a$12$AzozDXaHR9gYhQisg0x.deQ5piO3m2OjprZ7Onl4H1Md.kxs4LhcK",
             "email@email.com",
             "Vorname",
-            56);
+            "fds",
+            56,
+            "Universität Bielefeld");
         this.userRepository.save(user);
         this.userRepository.save(usera);
         this.userRepository.save(userb);

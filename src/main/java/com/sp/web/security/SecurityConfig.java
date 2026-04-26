@@ -1,82 +1,83 @@
 package com.sp.web.security; // <-- Make sure this matches your package!
 
-import lombok.RequiredArgsConstructor;
+import com.sp.web.domain.User;
+import com.sp.web.domain.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
 import java.util.Arrays;
-import java.util.List;
-
 @Configuration
+@EnableConfigurationProperties(SecurityConstant.class)
 @EnableWebSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
-
-    private final JwtAuthorizationFilter jwtAuthorizationFilter;
-
+    private final SecurityConstant securityConstants;
+    private final AuthenticationConfiguration configuration;
+    private final UserRepository userRepository;
+    // constructor for the configs
+    @Autowired
+    public SecurityConfig(final SecurityConstant securityConstants,
+                          AuthenticationConfiguration configuration,
+                          UserRepository userRepository) {
+        this.securityConstants = securityConstants;
+        this.configuration = configuration;
+        this.userRepository = userRepository;
+    }
+    // filter chain methode
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, UserDetailsService userDetailsService) throws Exception {
+        return http.csrf(AbstractHttpConfigurer::disable)
+            .cors(Customizer.withDefaults())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth ->
+                auth
+                    .requestMatchers("/api/users/updateAccountLockStatus/**").hasRole("admin")
+                    .requestMatchers("/api/users/showUsers/").authenticated()
+                    .requestMatchers("/api/users/").hasRole("admin")
+                    .requestMatchers("/api/users/deleteUser/**").hasRole("admin")
+                    .requestMatchers("/api/settings/saveSettings/**").hasRole("admin")
+                    .requestMatchers("/api/users/updateUser/**").permitAll()
+                    .requestMatchers("/api/users/forgot-password").permitAll()
+                    .requestMatchers("/api/users/reset-password").permitAll()
+                    .requestMatchers("/api/users/register").permitAll()
+                    .anyRequest().permitAll())
+            .addFilter(new JwtAuthenticationFilter(authenticationManager(), securityConstants))
+            .addFilter(new JwtAuthorizationFilter(authenticationManager(), userDetailsService, securityConstants, userRepository))
+            .build();
+    }
+    @Bean
+    public AuthenticationManager authenticationManager() throws Exception {
+        return configuration.getAuthenticationManager();
+    }
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
-
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-        return authenticationConfiguration.getAuthenticationManager();
-    }
-
-    // --- NEW CORS CONFIGURATION ---
+    // configuration source
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        // Allow the Vue frontend
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
-        // Allow all standard HTTP methods including the vital OPTIONS for preflight
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        // IMPORTANT: Allow the frontend to read the JWT token in the header!
-        configuration.setExposedHeaders(List.of(SecurityConstant.HEADER_STRING)); 
-        
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        final UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        final CorsConfiguration corsConfiguration = new CorsConfiguration().applyPermitDefaultValues();
+        corsConfiguration.setAllowedMethods(Arrays.asList("POST", "GET", "PUT", "PATCH", "DELETE"));
+        source.registerCorsConfiguration("/**", corsConfiguration);
         return source;
-    }
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, AuthenticationManager authenticationManager) throws Exception {
-        
-        JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(authenticationManager);
-
-        http
-            // Tell Spring Security to use the CORS rules we just defined above
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            
-            .csrf(AbstractHttpConfigurer::disable)
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/login").permitAll() 
-                .requestMatchers(HttpMethod.POST, "/api/users").permitAll() 
-                // Allow preflight OPTIONS requests to pass through without authentication
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/error").permitAll()
-                .anyRequest().authenticated() 
-            )
-            .addFilter(jwtAuthenticationFilter)
-            .addFilterBefore(jwtAuthorizationFilter, UsernamePasswordAuthenticationFilter.class);
-
-        return http.build();
     }
 }

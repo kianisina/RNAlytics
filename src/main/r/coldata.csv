@@ -1,0 +1,16 @@
+sample_id,condition
+L4_control,control
+L5_control,control
+L13_control,control
+L4_Ser,Ser
+L5_Ser,Ser
+L13_Ser,Ser
+L4_Ser_p38,Ser_p38
+L5_Ser_p38,Ser_p38
+L13_Ser_p38,Ser_p38
+L4_Ser_NFkB,Ser_NFkB
+L5_Ser_NFkB,Ser_NFkB
+L13_Ser_NFkB,Ser_NFkB
+L4_Ser_TGFb,Ser_TGFb
+L5_Ser_TGFb,Ser_TGFb
+L13_Ser_TGFb,Ser_TGFb

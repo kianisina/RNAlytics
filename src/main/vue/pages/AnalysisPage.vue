@@ -36,10 +36,8 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '../stores/auth' // <--- ADD THIS
 
-const authStore = useAuthStore() // <--- ADD THIS
+
 
 // State variables
 const selectedFile = ref(null)
@@ -62,15 +60,15 @@ const uploadAndGenerate = async () => {
     
     console.log("Checking token before sending:", token); // <-- Look at this in your F12 Console!
 
-    const response = await axios.post('http://localhost:8080/api/analysis/volcano', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': `Bearer ${token}` 
-      },
-      responseType: 'blob' 
-    });
+    // const response = await axios.post('http://localhost:8080/api/analysis/volcano', formData, {
+    //   headers: {
+    //     'Content-Type': 'multipart/form-data',
+    //     'Authorization': `Bearer ${token}` 
+    //   },
+    //   responseType: 'blob' 
+    // });
 
-    plotImageUrl.value = URL.createObjectURL(response.data);
+    // plotImageUrl.value = URL.createObjectURL(response.data);
 
   } catch (error) {
     console.error("Upload failed!", error);
