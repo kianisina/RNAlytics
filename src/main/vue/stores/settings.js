@@ -35,5 +35,9 @@ export const useSettingsStore = defineStore('settings', {
             const response = await settingAPI.getSettings();
             this.corporateDesign = response.data;
         },
+        async fetchCompanyName() {
+            const response = await settingAPI.getSettings();
+            this.corporateDesign = response.data;
+        }
     },
 });

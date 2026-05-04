@@ -50,5 +50,8 @@ export default {
     },
     getPca(jobId) {
         return axios.get(`/api/analysis/pca/${jobId}`, { responseType: 'blob' });
+    },
+    getHeatmapText(jobId, comparison) {
+        return axios.get(`/api/analysis/download/heatmap/${jobId}/${comparison}`, { responseType: 'text' });
     }
 }

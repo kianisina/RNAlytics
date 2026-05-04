@@ -137,9 +137,18 @@ export const useAnalysisStore = defineStore('analysis', () => {
             throw error;
         }
     }
+    async function fetchHeatmapText(jobId, comparison) {
+        try {
+            const response = await analysisAPI.getHeatmapText(jobId, comparison);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching heatmap text:', error);
+            throw error;
+        }
+    }
 
     return { 
         isUploading, uploadProgress, uploadedFileId, isAnalyzing, historyJobs, isHistoryLoading,
-        uploadFile, startAnalysis, fetchComparisons, fetchHistory, getPlotUrl, downloadResultCsv, getPcaUrl, fetchJobLog, fetchCsvText
+        uploadFile, startAnalysis, fetchComparisons, fetchHistory, getPlotUrl, downloadResultCsv, getPcaUrl, fetchJobLog, fetchCsvText, fetchHeatmapText
     };
 });

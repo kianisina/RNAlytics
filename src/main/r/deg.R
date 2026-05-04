@@ -57,6 +57,7 @@ counts <- counts[, common_samples, drop=FALSE]
 coldata <- coldata[common_samples, , drop=FALSE]
 counts <- round(counts)
 
+
 # 5. RUN CORE DESEQ2
 cat("Running Core DESeq2 Model...\n")
 dds <- DESeqDataSetFromMatrix(countData = counts, colData = coldata, design = ~ condition)
@@ -95,7 +96,14 @@ conditions <- levels(coldata$condition)
 
 # Create a matrix of all possible pairs (combinations of 2)
 # If you have 3 groups, this creates 3 pairs. If you have 5 groups, this creates 10 pairs!
-pairs <- combn(conditions, 2)
+# Create a dataframe of ALL permutations (25 total: 5x5)
+all_combinations <- expand.grid(group1 = conditions, group2 = conditions)
+
+# Remove the self-comparisons (e.g., control vs control)
+valid_pairs <- all_combinations[all_combinations$group1 != all_combinations$group2, ]
+
+# Convert it into a 2-row matrix so it perfectly matches your existing 'pairs' format
+pairs <- t(valid_pairs)
 
 cat("Found", ncol(pairs), "possible comparisons. Generating results...\n")
 
@@ -136,6 +144,41 @@ for (i in 1:ncol(pairs)) {
     # If a gene doesn't have a known symbol, keep the original ENSG ID so it isn't blank
     mapped_symbols[is.na(mapped_symbols)] <- res_df$Gene[is.na(mapped_symbols)]
     res_df$Symbol <- mapped_symbols
+  }
+  ##heatmap
+  cat("Generating Heatmap matrix for", comparison_name, "\n")
+
+  # 1. Get the top 50 significant genes sorted by lowest p-value
+  top_genes <- head(res_df$Gene[valid_rows & res_df$padj < 0.05], 50)
+
+  # Only proceed if we actually have significant genes
+  if (length(top_genes) > 0) {
+    # 2. Extract their normalized counts from the 'vsd' object
+    mat <- assay(vsd)[top_genes, , drop=FALSE]
+
+    # 3. Center the data (calculate Z-scores across rows)
+    mat <- mat - rowMeans(mat)
+
+    # --- THE MAGIC CLUSTERING FIX ---
+    # Calculate the mathematical distance between genes
+    gene_dist <- dist(mat)
+    # Build the hierarchical tree
+    gene_tree <- hclust(gene_dist)
+    # Reorder the matrix rows to match the tree!
+    mat <- mat[gene_tree$order, , drop=FALSE]
+    # --------------------------------
+
+    # 4. Format for export
+    heatmap_df <- as.data.frame(mat)
+    heatmap_df$Gene <- rownames(heatmap_df)
+
+    # Add symbols if we translated them earlier
+    if ("Symbol" %in% colnames(res_df)) {
+      heatmap_df$Symbol <- res_df$Symbol[match(heatmap_df$Gene, res_df$Gene)]
+    }
+
+    # Save the heatmap matrix
+    write.csv(heatmap_df, file=paste0(comparison_name, "_heatmap.csv"), row.names=FALSE)
   }
 
   # ONLY EXPORT CSV (No more HTML/PNG generation needed here!)

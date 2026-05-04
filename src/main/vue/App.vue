@@ -38,6 +38,9 @@ const logoUrl = computed(() => {
     const logo = settingsStore.corporateDesign?.logo;
     return logo ? `data:image/png;base64,${logo}` : 'https://upload.wikimedia.org/wikipedia/commons/d/d5/Deutsche_Bahn_AG-Logo.svg';
 });
+const companyName = computed(() => {
+    return settingsStore.corporateDesign?.companyName || 'Bioinformatics';
+});
 </script>
 
 <template>
@@ -49,12 +52,26 @@ const logoUrl = computed(() => {
                 <img v-else-if="logoUrl" :src="logoUrl" alt="Logo" style="height: 50px; margin-right: 10px;" />
                 
                 <q-toolbar-title>
-                    {{ settingsStore.corporateDesign.companyName || 'M-Maps' }}
+                    <q-spinner-dots v-if="isLoadingSettings" color="primary" size="2em" />
+                
+                    <div v-else class="text-h4 q-ma-sm">{{ companyName }}</div>
                 </q-toolbar-title>
             </q-toolbar>
-            <q-tabs align="left" :style="{backgroundColor: settingsStore.corporateDesign.backgroundColor, color:settingsStore.corporateDesign.fontColor}">
+            <q-tabs v-if="isLoadingSettings" align="left">
+                <q-tab disable>
+                <q-spinner-dots color="primary" size="2em" />
+                </q-tab>
+            </q-tabs>
+
+            <q-tabs 
+                v-else 
+                align="left" 
+                :style="{
+                    backgroundColor: settingsStore.corporateDesign?.backgroundColor, 
+                    color: settingsStore.corporateDesign?.fontColor
+                }"
+            >
                 <q-route-tab to="/profile" label="Profil" icon="account_circle" />
-               
                 <q-route-tab to="/home" label="Home" icon="home" />
                 <q-route-tab to="/history" label="History" icon="history" />
                 <q-route-tab to="/admin-settings" label="admin settings" icon="settings" />

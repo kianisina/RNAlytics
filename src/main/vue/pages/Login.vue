@@ -13,6 +13,7 @@ const settingsStore = useSettingsStore();
 const username = ref('');
 const password = ref('');
 const isLoadingLogo = ref(true); // <-- Add a loading state
+const isLoadingSettings = ref(true); // <-- Add a loading state for settings as well
 
 // Fetch the logo URL from settings store
 const logoUrl = computed(() => {
@@ -21,15 +22,20 @@ const logoUrl = computed(() => {
         ? `data:image/png;base64,${logo}` 
         : 'https://upload.wikimedia.org/wikipedia/commons/d/d5/Deutsche_Bahn_AG-Logo.svg';
 });
+const companyName = computed(() => {
+    return settingsStore.corporateDesign?.companyName || 'Bioinformatics';
+});
 
 // Assuming fetchLogo returns a Promise in your Pinia store
 onMounted(async () => {
     try {
         await settingsStore.fetchLogo();
+        await settingsStore.fetchCorporateDesign(); // <-- Fetch company name as well
     } catch (error) {
         console.error('Failed to fetch logo', error);
     } finally {
         isLoadingLogo.value = false; // <-- Turn off loading when done
+        isLoadingSettings.value = false; // <-- Turn off settings loading when done
     }
 });
 
@@ -55,7 +61,7 @@ function goToRegisterPage() {
 }
 
 function goToForgotPasswordPage() {
-    router.push('/forgot-password'); 
+    router.push('/forget-password'); 
 }
 </script>
 <template>
@@ -67,8 +73,10 @@ function goToForgotPasswordPage() {
                 <img v-else :src="logoUrl" alt="Logo" class="small-image">
             </div>
 
-            <div class="row-auto">
-                <div class="text-h4 q-ma-sm">{{ settingsStore.corporateDesign?.companyName || 'M-Maps' }}</div>
+            <div class="row-auto flex flex-center" style="min-height: 48px;">
+                <q-spinner-dots v-if="isLoadingSettings" color="primary" size="2em" />
+                
+                <div v-else class="text-h4 q-ma-sm">{{ companyName }}</div>
             </div>
             
             <div class="q-ma-sw">
@@ -83,7 +91,7 @@ function goToForgotPasswordPage() {
                 </div>
                 
                 <div class="q-mt-sm">
-                    <span class="forgot-password" @click="goToForgotPasswordPage()">Passwort vergessen?</span>
+                    <span class="forget-password" @click="goToForgotPasswordPage()">Passwort vergessen?</span>
                 </div>
             </div>
         </div>
@@ -94,7 +102,7 @@ function goToForgotPasswordPage() {
     width: 280px;
     height: auto;
 }
-.forgot-password {
+.forget-password {
     cursor: pointer;
     color: #0000EE; /* Adjust color as needed */
     text-decoration: underline;

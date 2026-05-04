@@ -118,6 +118,89 @@ function renderPlotly(data, comparison) {
     ], layout);
 }
 // ----------------------------------
+const showHeatmapDialog = ref(false);
+const currentPlotTitleh = ref('');
+const rawHeatmapData = ref([]); // Holds the raw CSV data
+const heatmapColumns = ref([]); // Holds the current order of the columns
+const draggedColIndex = ref(null); // Tracks which column is being dragged
+
+function viewHeatmap(comparison) {
+    analysisStore.fetchHeatmapText(activeJobId.value, comparison)
+        .then(csvText => {
+            window.Papa.parse(csvText, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    currentPlotTitleh.value = comparison;
+                    rawHeatmapData.value = results.data;
+                    
+                    // 1. Set the initial column order (excluding Gene and Symbol)
+                    heatmapColumns.value = Object.keys(results.data[0]).filter(k => k !== 'Gene' && k !== 'Symbol');
+                    
+                    showHeatmapDialog.value = true;
+                    
+                    nextTick(() => {
+                        renderHeatmap();
+                    });
+                }
+            });
+        })
+        .catch(() => {
+            $q.notify({ type: 'negative', message: 'Heatmap-Daten nicht gefunden.' });
+        });
+}
+
+// --- DRAG AND DROP FUNCTIONS ---
+function onDragStart(event, index) {
+    draggedColIndex.value = index;
+    event.dataTransfer.effectAllowed = 'move';
+}
+
+function onDrop(event, index) {
+    // 1. Remove the dragged column from its old position
+    const draggedColName = heatmapColumns.value.splice(draggedColIndex.value, 1)[0];
+    // 2. Insert it into the new position
+    heatmapColumns.value.splice(index, 0, draggedColName);
+    draggedColIndex.value = null;
+    
+    // 3. Instantly redraw the heatmap with the new order!
+    renderHeatmap();
+}
+// -------------------------------
+
+function renderHeatmap() {
+    const data = rawHeatmapData.value;
+    const activeCols = heatmapColumns.value; // The currently sorted columns!
+
+    const geneNames = data.map(row => row.Symbol ? row.Symbol : row.Gene);
+    
+    // Build the Z-matrix using the active column order
+    const zValues = data.map(row => {
+        return activeCols.map(colName => row[colName]);
+    });
+
+    const trace = {
+        z: zValues,
+        x: activeCols, // X-axis now uses our draggable array
+        y: geneNames,
+        type: 'heatmap',
+        colorscale: 'RdBu',
+        reversescale: true,
+        zmid: 0,
+        colorbar: { title: 'Z-Score' }
+    };
+
+    const layout = {
+        title: `Expression Pattern of Top 50 Genes (${currentPlotTitleh.value})`,
+        xaxis: { tickangle: -45, automargin: true },
+        yaxis: { automargin: true, tickfont: { size: 10 } },
+        margin: { l: 150, r: 50, b: 100, t: 50 }
+    };
+
+    // Use Plotly.react instead of newPlot! It updates existing plots much faster.
+    window.Plotly.react('heatmap-container', [trace], layout);
+}
 
 function handleDownload(comparison) {
     analysisStore.downloadResultCsv(activeJobId.value, comparison).catch(() => {
@@ -240,6 +323,7 @@ function viewLog(jobId) {
                             
                             <q-item-section side>
                                 <div class="row q-gutter-sm">
+                                    <q-btn outline color="warning" icon="grid_on" label="Heatmap" @click="viewHeatmap(comp)" />
                                     <q-btn outline color="primary" icon="image" label="Plot" @click="viewPlot(comp)" />
                                     <q-btn outline color="secondary" icon="download" label="CSV" @click="handleDownload(comp)" />
                                 </div>
@@ -264,6 +348,45 @@ function viewLog(jobId) {
 
                 <q-card-section class="q-pa-none" style="height: calc(100vh - 60px);">
                     <div id="plotly-container" style="width: 100%; height: 100%;"></div>
+                </q-card-section>
+            </q-card>
+        </q-dialog>
+
+        <q-dialog v-model="showHeatmapDialog" maximized transition-show="slide-up" transition-hide="slide-down">
+            <q-card class="bg-white text-dark column">
+        
+                <!-- Header -->
+                <q-card-section class="row items-center q-pb-none shadow-1 z-top col-auto">
+                    <div class="text-h6">Top 50 Genes Heatmap: {{ currentPlotTitleh }}</div>
+                    <q-space />
+                    <q-btn icon="close" flat round dense @click="showHeatmapDialog = false" />
+                </q-card-section>
+
+                <!-- NEW: The Draggable Control Bar -->
+                <q-card-section class="bg-grey-2 col-auto q-py-sm border-bottom">
+                    <div class="text-caption text-grey-8 q-mb-xs">
+                        <q-icon name="info" size="16px" class="q-mr-xs"/> 
+                        Spalten neu anordnen (Drag & Drop)
+                    </div>
+                    <div class="row q-gutter-sm">
+                        <!-- Native HTML5 Drag and Drop on Vue Chips -->
+                        <q-chip 
+                            v-for="(col, index) in heatmapColumns" :key="col"
+                            draggable="true"
+                            @dragstart="onDragStart($event, index)"
+                            @dragover.prevent
+                            @drop="onDrop($event, index)"
+                            color="primary" text-color="white" icon="drag_indicator" 
+                            class="cursor-pointer shadow-1"
+                        >
+                            {{ col }}
+                        </q-chip>
+                    </div>
+                </q-card-section>
+
+                <!-- The Plotly Canvas -->
+                <q-card-section class="q-pa-none col" style="min-height: 0;">
+                    <div id="heatmap-container" style="width: 100%; height: 100%;"></div>
                 </q-card-section>
             </q-card>
         </q-dialog>

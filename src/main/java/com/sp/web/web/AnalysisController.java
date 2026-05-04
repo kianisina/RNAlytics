@@ -163,4 +163,26 @@ public class AnalysisController {
             return ResponseEntity.internalServerError().body("Fehler beim Lesen der Log-Datei.");
         }
     }
+
+    @GetMapping("/download/heatmap/{jobId}/{comparison}")
+    public ResponseEntity<Resource> downloadHeatmapCsv(
+            @PathVariable String jobId, 
+            @PathVariable String comparison, 
+            @AuthenticationPrincipal User user) {
+        try {
+            String fileName = comparison + "_heatmap.csv";
+            Path filePath = Paths.get(baseStorageDir, user.getUsername(), jobId, fileName);
+            Resource resource = new UrlResource(filePath.toUri());
+
+            if (resource.exists() || resource.isReadable()) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.TEXT_PLAIN) // Serve as text for PapaParse
+                        .body(resource);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 }
