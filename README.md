@@ -5,23 +5,24 @@ RNAlytics is a web-based bioinformatics platform designed to simplify RNA-seq di
 ## Features
 
 -  **Differential Gene Expression Analysis**
-  - Upload RNA-seq count data
-  - Compare experimental groups
-  - Identify significantly differentially expressed genes (DEGs)
-  - Calculate log2 fold changes and adjusted p-values
+    - Upload RNA-seq count data
+    - Compare experimental groups
+    - Identify significantly differentially expressed genes (DEGs)
+    - Calculate log2 fold changes and adjusted p-values
 
 -  **Interactive Visualizations**
-  - Volcano plots for DEG overview
-  - Heatmaps for expression patterns
-  - Visualization of upregulated and downregulated genes
+    - PCA plot
+    - Volcano plots for DEG overview
+    - Heatmaps for expression patterns
+    - Visualization of upregulated and downregulated genes
 
 -  **Data Export**
-  - Download processed expression results as CSV files
-  - Export DEG tables for downstream analysis
+    - Download processed expression results as CSV files
+    - Export DEG tables for downstream analysis
 
 -  **User-Friendly Interface**
-  - Designed for researchers without extensive bioinformatics programming experience
-  - Streamlined workflow from raw count matrix to biological interpretation
+    - Designed for researchers without extensive bioinformatics programming experience
+    - Streamlined workflow from raw count matrix to biological interpretation
 
 ## Workflow
 
