@@ -1,6 +1,6 @@
-# RNAlytics
+# BioRNAlytics
 
-RNAlytics is a web-based bioinformatics platform designed to simplify RNA-seq differential gene expression analysis for researchers and biologists. The platform allows users to upload gene expression count matrices, perform statistical analysis, visualize results, and download processed data without requiring advanced programming knowledge.
+BioRNAlytics is a web-based bioinformatics platform designed to simplify RNA-seq differential gene expression analysis for researchers and biologists. The platform allows users to upload gene expression count matrices, perform statistical analysis, visualize results, and download processed data without requiring advanced programming knowledge.
 
 ## Features
 
@@ -38,7 +38,7 @@ RNAlytics is a web-based bioinformatics platform designed to simplify RNA-seq di
 
 ## Supported Analysis
 
-RNAlytics uses established bioinformatics methods for differential expression analysis, including:
+BioRNAlytics uses established bioinformatics methods for differential expression analysis, including:
 
 - Count normalization
 - Statistical testing
@@ -48,7 +48,7 @@ RNAlytics uses established bioinformatics methods for differential expression an
 
 ## Input
 
-RNAlytics accepts:
+BioRNAlytics accepts:
 
 - Gene expression count matrices (CSV / txt format)
 - Sample metadata describing experimental conditions
@@ -56,7 +56,7 @@ RNAlytics accepts:
 
 ## Output
 
-RNAlytics generates:
+BioRNAlytics generates:
 
 - PCA plot
 - Differential expression table
