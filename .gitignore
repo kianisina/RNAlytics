@@ -41,3 +41,5 @@ __screenshots__/
 
 src/main/resources/application.properties
 target/
+node/
+dev-dist/
