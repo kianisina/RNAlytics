@@ -29,6 +29,7 @@ RNAlytics is a web-based bioinformatics platform designed to simplify RNA-seq di
 2. Define experimental conditions/groups
 3. Run differential expression analysis
 4. Explore results using:
+   - PCA plot
    - Volcano plots
    - Heatmaps
    - DEG tables
@@ -56,6 +57,7 @@ RNAlytics accepts:
 
 RNAlytics generates:
 
+- PCA plot
 - Differential expression table
 - Adjusted p-values (FDR)
 - Log2 fold changes
@@ -70,3 +72,7 @@ RNAlytics generates:
 - Visualization: ggplot2 / Plotly
 - Frontend: Vue
 - Database: MongoDB
+
+## License
+
+RNAlytics is released under the MIT License.
