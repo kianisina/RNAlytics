@@ -40,3 +40,4 @@ __screenshots__/
 .Rproj.user
 
 src/main/resources/application.properties
+target/
